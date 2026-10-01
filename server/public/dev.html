@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PokerKloss – testklient</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#101316; --surface:#1a1f24; --line:#2a3138; --text:#e7ecf0; --muted:#8b97a3; --accent:#4fd1a5; --warn:#f2b35b; --red:#ef6b6b; --felt:#153d30; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.45 Inter, system-ui, sans-serif; }
+  header { display:flex; gap:12px; align-items:center; padding:12px 16px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  h1 { font:700 20px 'Space Grotesk', sans-serif; margin:0 12px 0 0; }
+  h1 span { color:var(--accent); }
+  input, select, button { font:inherit; color:var(--text); background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:8px 12px; }
+  button { cursor:pointer; font-weight:600; }
+  button.primary { background:var(--accent); color:#06231a; border-color:var(--accent); }
+  button:disabled { opacity:.4; cursor:default; }
+  main { max-width:960px; margin:0 auto; padding:16px; }
+  .table { position:relative; background:radial-gradient(ellipse at center, #1d5140 0%, var(--felt) 70%); border:8px solid #2b2118; border-radius:160px; height:360px; margin:24px 0; }
+  .board { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); text-align:center; }
+  .pot { font:600 14px 'Space Grotesk'; color:var(--warn); margin-top:8px; }
+  .cards { display:flex; gap:4px; justify-content:center; }
+  .card { width:38px; height:54px; border-radius:6px; background:#f7f7f2; color:#111; font:700 16px 'Space Grotesk'; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 0 rgba(0,0,0,.4); }
+  .card.r { color:#c62828; } .card.back { background:repeating-linear-gradient(45deg,#2c5aa0,#2c5aa0 4px,#3a6cb8 4px,#3a6cb8 8px); }
+  .seat { position:absolute; width:130px; transform:translate(-50%,-50%); text-align:center; background:rgba(16,19,22,.85); border:1px solid var(--line); border-radius:10px; padding:6px; }
+  .seat.turn { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent); }
+  .seat.folded { opacity:.45; } .seat.out { opacity:.25; }
+  .seat .name { font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .seat .stack { color:var(--muted); font-size:12px; }
+  .seat .bet { color:var(--warn); font-size:12px; min-height:16px; }
+  .btn-dealer { display:inline-block; background:#fff; color:#000; border-radius:50%; width:18px; height:18px; font-size:11px; font-weight:700; line-height:18px; }
+  .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .controls input[type=range] { flex:1; min-width:140px; }
+  .log { background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:10px; height:180px; overflow:auto; font-size:13px; color:var(--muted); margin-top:16px; }
+  .muted { color:var(--muted); }
+  .info { display:flex; gap:16px; flex-wrap:wrap; color:var(--muted); font-size:13px; }
+  @media (max-width:600px){ .table{height:300px;border-radius:90px} .seat{width:96px;font-size:12px} .card{width:30px;height:44px;font-size:13px} }
+</style>
+</head>
+<body>
+<header>
+  <h1>Poker<span>Kloss</span></h1>
+  <input id="name" placeholder="Navn" value="Andre" size="10">
+  <button id="login">Logg inn (dev)</button>
+  <select id="bots"><option>1</option><option>2</option><option>3</option><option selected>5</option><option>8</option></select>
+  <button id="training" disabled>Treningsbord mot Ai</button>
+  <select id="format"><option value="hu">Heads-up</option><option value="sng6">SNG 6</option><option value="sng9">SNG 9</option></select>
+  <button id="queue" disabled>Ratet kø</button>
+  <span id="status" class="muted"></span>
+</header>
+<main>
+  <div class="info"><span id="level"></span><span id="me"></span><span id="deadline"></span></div>
+  <div class="table" id="table"><div class="board"><div class="cards" id="board"></div><div class="pot" id="pot"></div></div></div>
+  <div class="controls">
+    <button id="fold" disabled>Fold</button>
+    <button id="check" disabled>Check</button>
+    <button id="call" disabled>Call</button>
+    <input id="amount" type="range" min="0" max="0" step="10" disabled>
+    <span id="amountLabel" class="muted"></span>
+    <button id="raise" class="primary" disabled>Høyn</button>
+    <button id="allin" disabled>All-in</button>
+    <button id="sit">Sitt ute</button>
+  </div>
+  <div class="log" id="log"></div>
+  <h2 style="font:600 16px 'Space Grotesk';margin:20px 0 8px">Klubbturneringer</h2>
+  <div id="club" class="muted">Logg inn for å se planlagte turneringer.</div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let token = null, ws = null, tournamentId = null, state = null, turn = null, sittingOut = false;
+const log = (t) => { const d = document.createElement('div'); d.textContent = t; $('log').prepend(d); };
+const api = (method, path, body) => fetch(path, { method, headers: { Authorization: 'Bearer ' + token, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined }).then(r => r.json().then(j => ({ status: r.status, body: j })));
+const SUIT = { s: '♠', h: '♥', d: '♦', c: '♣' };
+const card = (c) => c === '??' ? '<div class="card back"></div>' : `<div class="card ${'hd'.includes(c[1]) ? 'r' : ''}">${c[0] === 'T' ? '10' : c[0]}${SUIT[c[1]]}</div>`;
+
+$('login').onclick = () => {
+  const name = $('name').value.trim() || 'Spiller';
+  token = `dev:${name.toLowerCase().replace(/[^a-z0-9æøå]/g, '')}:${name}`;
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/poker/ws?token=${encodeURIComponent(token)}`);
+  ws.onmessage = (m) => onMsg(JSON.parse(m.data));
+  ws.onopen = async () => { $('status').textContent = 'Tilkoblet'; $('training').disabled = false; $('queue').disabled = false; await api('POST', '/poker/me/confirm-age', { over18: true }); loadClub(); };
+  ws.onclose = () => { $('status').textContent = 'Frakoblet'; };
+};
+$('training').onclick = async () => { const r = await api('POST', '/poker/training', { bots: +$('bots').value }); if (r.status !== 201) log(r.body.message); };
+$('queue').onclick = async () => { const r = await api('POST', '/poker/sng/queue', { format: $('format').value }); log(r.status === 200 ? `I kø: ${r.body.position?.waiting ?? '-'} av ${r.body.position?.size ?? '-'}` : r.body.message); };
+const act = (type, amount) => ws.send(JSON.stringify({ type: 'action', tournamentId, action: { type, amount } }));
+async function loadClub() {
+  const r = await api('GET', '/poker/tournaments');
+  const el = $('club');
+  if (!r.body.tournaments?.length) { el.textContent = 'Ingen planlagte turneringer.'; return; }
+  el.innerHTML = '';
+  for (const t of r.body.tournaments) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)';
+    const when = new Date(t.startAt).toLocaleString('no-NO', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    row.innerHTML = `<span style="flex:1;color:var(--text)">${t.name}</span><span>${when}</span><span>${t.registered}/${t.maxPlayers}</span>`;
+    const b = document.createElement('button');
+    b.textContent = t.status !== 'open' ? 'Pågår' : t.registeredMe ? 'Meld av' : 'Meld på';
+    b.disabled = t.status !== 'open';
+    b.onclick = async () => { const x = await api(t.registeredMe ? 'DELETE' : 'POST', `/poker/tournaments/${t.id}/register`); if (x.status !== 200) log(x.body.message); loadClub(); };
+    row.appendChild(b); el.appendChild(row);
+  }
+}
+$('fold').onclick = () => act('fold');
+$('check').onclick = () => act('check');
+$('call').onclick = () => act('call');
+$('raise').onclick = () => act('raise', +$('amount').value);
+$('allin').onclick = () => act('allin');
+$('amount').oninput = () => $('amountLabel').textContent = 'til ' + $('amount').value;
+$('sit').onclick = () => { sittingOut = !sittingOut; ws.send(JSON.stringify({ type: sittingOut ? 'sitout' : 'sitin', tournamentId })); $('sit').textContent = sittingOut ? 'Bli med igjen' : 'Sitt ute'; };
+
+function onMsg(m) {
+  if (m.type === 'hello') { $('me').textContent = 'Innlogget som ' + m.name; return; }
+  if (m.type === 'match.found') { log('Bord funnet: ' + m.tournamentId); return; }
+  if (m.type === 'scheduled.started') { log('Klubbturneringen har startet!'); return; }
+  if (m.type === 'scheduled.cancelled') { log('Turnering avlyst: ' + m.reason); loadClub(); return; }
+  if (m.type === 'table.moved') { log(`Du er flyttet fra bord ${m.fromTable} til ${m.toTable}`); return; }
+  if (m.type === 'eliminated') { log(`Du er ute – ${m.place}. plass`); return; }
+  if (m.type === 'tournament.update') { if (state) { state.overview = m.overview; render(); } return; }
+  if (m.type === 'error') { log('Feil: ' + m.message); return; }
+  if (m.type === 'turn.deadline') { const s = Math.round((m.deadline - Date.now()) / 1000); $('deadline').textContent = `Din tur – ${s} sek`; return; }
+  if (m.type === 'sitout') { sittingOut = true; $('sit').textContent = 'Bli med igjen'; log('Tiden gikk ut – du sitter ute'); return; }
+  if (m.type === 'table.state') { tournamentId = m.tournamentId; state = m.state; turn = state.hand?.legal ? { seat: state.mySeat, ...state.hand.legal } : null; render(); return; }
+  if (m.type === 'events') { for (const e of m.events) apply(e); render(); }
+}
+
+function apply(e) {
+  const h = state.hand;
+  switch (e.type) {
+    case 'level': state.level = e; break;
+    case 'hand.start':
+      state.hand = { board: [], pot: 0, buttonSeat: e.buttonSeat, handId: e.handId, players: e.seats.map(s => ({ seat: s.seat, stack: s.stack, bet: 0, folded: false, cards: ['??', '??'] })) };
+      for (const s of e.seats) state.seats[s.seat] = { ...(state.seats[s.seat] || {}), seat: s.seat, id: s.id, name: s.name, stack: s.stack, bot: s.bot };
+      turn = null; log(`— Hånd ${e.handId}  blinds ${e.smallBlind}/${e.bigBlind}${e.ante ? ' ante ' + e.ante : ''}  (seed-hash ${e.seedHash.slice(0, 10)}…)`);
+      break;
+    case 'post': { const p = pl(e.seat); p.stack -= e.amount; p.bet += e.amount; h.pot += e.amount; break; }
+    case 'cards.private': pl(e.seat).cards = e.cards; break;
+    case 'turn': turn = e; break;
+    case 'action.applied': { const p = pl(e.seat); p.stack = e.stack; p.bet = e.bet; if (e.action === 'fold') p.folded = true; h.pot = e.pot; turn = null; $('deadline').textContent = '';
+      log(`${state.seats[e.seat].name}: ${({fold:'folder',check:'checker',call:'caller',bet:'satser',raise:'høyner til',allin:'all-in'})[e.action]}${['bet','raise','allin','call'].includes(e.action) ? ' ' + e.amount : ''}`); break; }
+    case 'board': h.board = e.board; h.pot = e.pot; for (const p of h.players) p.bet = 0; break;
+    case 'uncalled.returned': { const p = pl(e.seat); p.stack += e.amount; p.bet -= e.amount; h.pot -= e.amount; break; }
+    case 'allin.runout': case 'showdown': for (const x of e.hands) { pl(x.seat).cards = x.cards; if (x.rank) log(`${state.seats[x.seat].name} viser ${x.cards.join(' ')} – ${x.rank}`); } break;
+    case 'pots.awarded': for (const p of e.pots) log(`${p.winners.map(s => state.seats[s].name).join(' og ')} vinner ${p.amount}`); break;
+    case 'hand.end': for (const [s, v] of Object.entries(e.stacks)) { if (state.seats[s]) state.seats[s].stack = v; const p = pl(+s); if (p) { p.stack = v; p.bet = 0; } } h.pot = 0; turn = null; break;
+    case 'player.eliminated': state.seats[e.seat].place = e.place; log(`${state.seats[e.seat].name} er ute – ${e.place}. plass`); break;
+    case 'tournament.result': state.results = e.placings; log('Turneringen er ferdig: ' + e.placings.map(p => `${p.place}. ${p.name}${p.delta != null ? ` (${p.delta >= 0 ? '+' : ''}${p.delta})` : ''}`).join(', ')); break;
+  }
+}
+const pl = (seat) => state.hand?.players.find(p => p.seat === seat);
+
+function render() {
+  if (!state) return;
+  const lv = state.level, ov = state.overview;
+  $('level').textContent = (lv ? `Nivå ${lv.index + 1}: ${lv.sb}/${lv.bb}${lv.ante ? ' ante ' + lv.ante : ''}` : '') + (ov && ov.entrants > 9 ? `  ·  Igjen ${ov.remaining}/${ov.entrants} · ${ov.tables.length} bord · snitt ${ov.averageStack}` : '') + (state.tableId ? `  ·  Bord ${state.tableId}` : '');
+  const t = $('table'); t.querySelectorAll('.seat').forEach(n => n.remove());
+  const occ = state.seats.filter(Boolean), n = occ.length, me = state.mySeat;
+  const meIdx = Math.max(0, occ.findIndex(s => s.seat === state.mySeat));
+  occ.forEach((s, i) => {
+    const k = (i - meIdx + n) % n, ang = Math.PI / 2 + (2 * Math.PI * k) / n;
+    const x = 50 + 44 * Math.cos(ang), y = 50 + 40 * Math.sin(ang);
+    const hp = pl(s.seat), el = document.createElement('div');
+    el.className = 'seat' + (turn?.seat === s.seat ? ' turn' : '') + (hp?.folded ? ' folded' : '') + (!hp && s.place ? ' out' : '');
+    el.style.left = x + '%'; el.style.top = y + '%';
+    el.innerHTML = `<div class="name">${state.hand?.buttonSeat === s.seat ? '<span class="btn-dealer">D</span> ' : ''}${s.name}</div>
+      <div class="cards">${hp ? hp.cards.map(card).join('') : ''}</div>
+      <div class="stack">${s.place ? s.place + '. plass' : (hp ? hp.stack : s.stack)}</div><div class="bet">${hp?.bet ? hp.bet : ''}</div>`;
+    t.appendChild(el);
+  });
+  $('board').innerHTML = (state.hand?.board ?? []).map(card).join('');
+  $('pot').textContent = state.hand?.pot ? 'Pot ' + state.hand.pot : '';
+  const mine = turn && turn.seat === me;
+  $('fold').disabled = !mine; $('check').disabled = !(mine && turn.canCheck);
+  $('call').disabled = !(mine && !turn.canCheck); $('call').textContent = mine && !turn.canCheck ? 'Call ' + turn.toCall : 'Call';
+  $('raise').disabled = $('amount').disabled = !(mine && turn.canRaise);
+  $('allin').disabled = !(mine && turn.canRaise);
+  if (mine && turn.canRaise) { const a = $('amount'); a.min = turn.minRaiseTo; a.max = turn.maxRaiseTo; if (+a.value < turn.minRaiseTo || +a.value > turn.maxRaiseTo) a.value = turn.minRaiseTo; $('amountLabel').textContent = 'til ' + a.value; }
+  else $('amountLabel').textContent = '';
+}
+</script>
+</body>
+</html>

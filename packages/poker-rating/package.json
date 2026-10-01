@@ -1,0 +1,21 @@
+{
+  "name": "@arena/poker-rating",
+  "version": "0.1.0",
+  "description": "PokerKloss rating: OpenSkill på turneringsplassering",
+  "main": "src/index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.js\""
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "openskill": "^5.0.1"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "private": true
+}

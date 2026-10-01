@@ -1,0 +1,19 @@
+{
+  "name": "pokerkloss",
+  "version": "0.4.0",
+  "private": true,
+  "description": "PokerKloss – gratis poker for A5 Arena. Ingen penger, kun rating.",
+  "workspaces": [
+    "packages/poker-core",
+    "packages/poker-rating",
+    "server"
+  ],
+  "scripts": {
+    "start": "npm run start -w server",
+    "dev": "npm run dev -w server",
+    "test": "npm test -w packages/poker-core && npm test -w packages/poker-rating && npm test -w server"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

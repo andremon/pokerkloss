@@ -1,0 +1,28 @@
+{
+  "name": "@arena/poker-server",
+  "version": "0.4.0",
+  "description": "PokerKloss server: REST + WebSocket rundt poker-core. Gratis poker for A5 Arena – ingen penger, kun rating.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js --dev",
+    "migrate": "node src/store/migrate.js",
+    "test": "node --test \"test/*.test.js\"",
+    "token": "node scripts/lag-testtoken.js",
+    "nokler": "node scripts/lag-nokler.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@arena/poker-core": "*",
+    "@arena/poker-rating": "*",
+    "express": "^4.22.3",
+    "jose": "^5.10.0",
+    "pg": "^8.23.0",
+    "ws": "^8.22.0"
+  },
+  "private": true,
+  "license": "UNLICENSED"
+}
