@@ -2,6 +2,7 @@
 
 import http from 'node:http';
 import { randomUUID, randomInt } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { WebSocketServer } from 'ws';
 import { PokerError, STRUCTURES } from '@arena/poker-core';
@@ -216,7 +217,7 @@ export function createPokerServer({ config, store, auth, membership, log = conso
 
   if (config.devAuth) {
     // Enkel nettleserklient for testing. Kun i utviklingsmodus.
-    app.get('/dev', (req, res) => res.sendFile(new URL('../public/dev.html', import.meta.url).pathname));
+  app.get('/dev', (req, res) => res.sendFile(fileURLToPath(new URL('../public/dev.html', import.meta.url))));
   }
 
   app.get('/health', (req, res) => res.json({ ok: true, tournaments: tournaments.size, store: store.kind }));
